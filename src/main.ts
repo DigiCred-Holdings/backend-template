@@ -7,10 +7,9 @@ async function bootstrap() {
 
   // Swagger integration
   const config = new DocumentBuilder()
-    .setTitle('Cats example')
-    .setDescription('The cats API description')
+    .setTitle('DigiCred')
+    .setDescription('The DigiCred API description')
     .setVersion('1.0')
-    .addTag('cats')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
