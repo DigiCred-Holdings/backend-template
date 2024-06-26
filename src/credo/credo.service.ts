@@ -9,20 +9,39 @@ import {
   ConnectionEventTypes,
   DidExchangeState,
   ConnectionsModule,
+  DidsModule,
+  CredentialsModule,
+  V2CredentialProtocol,
+  CredentialStateChangedEvent,
+  CredentialEventTypes,
+  CredentialState,
+  ConsoleLogger,
+  LogLevel,
 } from '@credo-ts/core';
 import { HttpInboundTransport, agentDependencies } from '@credo-ts/node';
 import { AskarModule } from '@credo-ts/askar';
 import { ariesAskar } from '@hyperledger/aries-askar-nodejs';
-import { IndyVdrModule } from '@credo-ts/indy-vdr';
+import {
+  IndyVdrAnonCredsRegistry,
+  IndyVdrIndyDidRegistrar,
+  IndyVdrIndyDidResolver,
+  IndyVdrModule,
+} from '@credo-ts/indy-vdr';
 import { indyVdr } from '@hyperledger/indy-vdr-nodejs';
 import ledgers from '../config/ledgers/indy/index';
 import { QrcodeService } from 'src/qrcode/qrcode.service';
 import type { IndyVdrPoolConfig } from '@credo-ts/indy-vdr';
+import {
+  AnonCredsCredentialFormatService,
+  AnonCredsModule,
+  LegacyIndyCredentialFormatService,
+} from '@credo-ts/anoncreds';
+import { anoncreds } from '@hyperledger/anoncreds-nodejs';
 
 @Injectable()
 export class CredoService {
   private readonly logger = new Logger(CredoService.name);
-  private agent: Agent;
+  public agent: Agent;
   private config: InitConfig;
   private agents: Map<string, Agent> = new Map();
 
@@ -42,6 +61,7 @@ export class CredoService {
         key: name,
       },
       endpoints: [`${endpoint}:${port}`],
+      logger: new ConsoleLogger(LogLevel.info),
     };
 
     this.agent = new Agent({
@@ -59,6 +79,28 @@ export class CredoService {
           ariesAskar,
         }),
         connections: new ConnectionsModule({ autoAcceptConnections: true }),
+
+        anoncreds: new AnonCredsModule({
+          registries: [new IndyVdrAnonCredsRegistry()],
+          anoncreds,
+        }),
+
+        dids: new DidsModule({
+          registrars: [new IndyVdrIndyDidRegistrar()],
+          resolvers: [new IndyVdrIndyDidResolver()],
+        }),
+
+        // to issue a credential
+        credentials: new CredentialsModule({
+          credentialProtocols: [
+            new V2CredentialProtocol({
+              credentialFormats: [
+                new LegacyIndyCredentialFormatService(),
+                new AnonCredsCredentialFormatService(),
+              ],
+            }),
+          ],
+        }),
       },
     });
 
@@ -177,8 +219,12 @@ export class CredoService {
           // anything is possible
           cb();
 
+          // Set up credential listener
+          console.log('setupCredentialListener');
+          this.setupCredentialListener(agent);
+
           // We exit the flow
-          process.exit(0);
+          // process.exit(0);
         }
       },
     );
@@ -190,5 +236,79 @@ export class CredoService {
 
   getOutOfBandRecordById(id: string): Promise<OutOfBandRecord | null> {
     return this.agent.oob.findById(id);
+  }
+
+  async issueCredential(
+    connectionId: string,
+    credentialDefinitionId: string,
+    attributes: any,
+  ) {
+    const [connectionRecord] =
+      await this.agent.connections.findAllByOutOfBandId(connectionId);
+
+    if (!connectionRecord) {
+      throw new Error(
+        `ConnectionRecord: record with id ${connectionId} not found.`,
+      );
+    }
+
+    console.log(attributes, 'attributesattributesattributes');
+    const credentialExchangeRecord =
+      await this.agent.credentials.offerCredential({
+        connectionId: connectionRecord.id,
+        credentialFormats: {
+          anoncreds: {
+            credentialDefinitionId,
+            attributes,
+          },
+        },
+        protocolVersion: 'v2' as never,
+      });
+
+    return credentialExchangeRecord;
+  }
+
+  setupCredentialListener(agent: Agent) {
+    agent.events.on<CredentialStateChangedEvent>(
+      CredentialEventTypes.CredentialStateChanged,
+      async ({ payload }) => {
+        this.logger.log(
+          `Credential state changed: ${payload.credentialRecord.id}, state: ${payload.credentialRecord.state}`,
+        );
+
+        switch (payload.credentialRecord.state) {
+          case CredentialState.OfferSent:
+            this.logger.log(`Credential offer sent to holder.`);
+            break;
+          case CredentialState.RequestReceived:
+            this.logger.log(`Credential request received from holder.`);
+            // Automatically respond to credential request if desired
+            await this.agent.credentials.acceptRequest({
+              credentialRecordId: payload.credentialRecord.id,
+            });
+            break;
+          case CredentialState.CredentialIssued: // Adjusted to match your enum
+            this.logger.log(`Credential issued to holder.`);
+            // Handle the issuance process or update state as necessary
+            break;
+          case CredentialState.Done:
+            this.logger.log(
+              `Credential ${payload.credentialRecord.id} is accepted by the wallet`,
+            );
+            // Add your custom business logic here, e.g., updating your database or notifying a service
+            break;
+          case CredentialState.Declined:
+            this.logger.log(
+              `Credential ${payload.credentialRecord.id} is rejected by the wallet`,
+            );
+            // Handle rejection if needed
+            break;
+          default:
+            this.logger.log(
+              `Unhandled credential state: ${payload.credentialRecord.state}`,
+            );
+        }
+      },
+    );
   }
 }

@@ -1096,6 +1096,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@hyperledger/anoncreds-nodejs@npm:0.2.2":
+  version: 0.2.2
+  resolution: "@hyperledger/anoncreds-nodejs@npm:0.2.2"
+  dependencies:
+    "@2060.io/ffi-napi": ^4.0.9
+    "@2060.io/ref-napi": ^3.0.6
+    "@hyperledger/anoncreds-shared": 0.2.2
+    "@mapbox/node-pre-gyp": ^1.0.11
+    ref-array-di: 1.2.2
+    ref-struct-di: 1.1.1
+  checksum: 79451de6e33287bb5b7df9b3513659b0edb424109f5ec614472d097123c9b0fef582c6a96dd75503c4269841e05306f6c2c300d2df83fb08c85a9b9203093b21
+  languageName: node
+  linkType: hard
+
 "@hyperledger/anoncreds-shared@npm:0.2.2":
   version: 0.2.2
   resolution: "@hyperledger/anoncreds-shared@npm:0.2.2"
@@ -1490,7 +1504,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mapbox/node-pre-gyp@npm:^1.0.10":
+"@mapbox/node-pre-gyp@npm:^1.0.10, @mapbox/node-pre-gyp@npm:^1.0.11":
   version: 1.0.11
   resolution: "@mapbox/node-pre-gyp@npm:1.0.11"
   dependencies:
@@ -4551,10 +4565,12 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "digi-cred@workspace:."
   dependencies:
+    "@credo-ts/anoncreds": 0.5.3
     "@credo-ts/askar": 0.5.3
     "@credo-ts/core": 0.5.3
     "@credo-ts/indy-vdr": 0.5.3
     "@credo-ts/node": 0.5.3
+    "@hyperledger/anoncreds-nodejs": 0.2.2
     "@hyperledger/anoncreds-shared": 0.2.2
     "@hyperledger/aries-askar-nodejs": 0.2.1
     "@hyperledger/indy-vdr-nodejs": 0.2.2
@@ -9110,7 +9126,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ref-array-di@npm:^1.2.2":
+"ref-array-di@npm:1.2.2, ref-array-di@npm:^1.2.2":
   version: 1.2.2
   resolution: "ref-array-di@npm:1.2.2"
   dependencies:
@@ -9121,7 +9137,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ref-struct-di@npm:^1.1.0, ref-struct-di@npm:^1.1.1":
+"ref-struct-di@npm:1.1.1, ref-struct-di@npm:^1.1.0, ref-struct-di@npm:^1.1.1":
   version: 1.1.1
   resolution: "ref-struct-di@npm:1.1.1"
   dependencies:

@@ -2,8 +2,9 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { QrcodeService } from './qrcode.service';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CreateQrCodeDto } from './dto/create-qrcode.dto';
+import { API_VERSION } from 'src/constants';
 
-@Controller('qrcode')
+@Controller(`${API_VERSION}/qrcode`)
 @ApiTags('QR Code')
 export class QrcodeController {
   constructor(private readonly qrCodeService: QrcodeService) {}

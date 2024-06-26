@@ -6,5 +6,6 @@ import { QrcodeService } from 'src/qrcode/qrcode.service';
 @Module({
   controllers: [CredoController],
   providers: [CredoService, QrcodeService],
+  exports: [CredoService],
 })
 export class CredoModule {}
