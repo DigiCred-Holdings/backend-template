@@ -1,11 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  FilterDto,
-  PaginationDto,
-  QueryDto,
-  SortDto,
-} from './dto/connections.dto';
+import { QueryDto } from './dto/connections.dto';
 import { CredoService } from 'src/credo/credo.service';
+import { ConnectionRecord, ConnectionType } from '@credo-ts/core';
+import { applyFilter, applySort } from 'src/common/utils/filter-sort.utils';
+import { cursorPaginate } from 'src/common/utils/pagination-cursor.utils';
 
 @Injectable()
 export class ConnectionsService {
@@ -22,138 +20,213 @@ export class ConnectionsService {
    */
   async findAll(query: QueryDto): Promise<any> {
     try {
-      // Fetch all connections from the credo service
-      const connections = await this.credoService.agent.connections.getAll();
+      this.logger.log('Retrieving all connections');
+      const connections: any =
+        await this.credoService.agent.connections.getAll();
 
       // Apply filtering
-      let filteredConnections = this.applyFilter(connections, query?.filter);
+      let filteredConnections = applyFilter(connections, query?.filter);
 
       // Apply sorting
       if (query.sort) {
-        filteredConnections = this.applySort(filteredConnections, query.sort);
+        filteredConnections = applySort(filteredConnections, query.sort);
       }
 
       // Apply cursor pagination
-      const paginatedResult = this.cursorPaginate(
+      const paginatedResult = cursorPaginate(
         filteredConnections,
-        query.pagination,
+        query,
+        this.idField,
       );
 
       return paginatedResult;
     } catch (error) {
-      this.logger.error(`Failed to retrieve connections: ${error.message}`);
+      this.logger.error(`Failed to retrieve connections.`);
       throw error;
     }
   }
 
   /**
-   * Apply filtering to the connections based on the provided filter DTO.
-   * @param connections Array of connections to filter.
-   * @param filter Filter DTO with filtering criteria.
-   * @returns The filtered array of connections.
+   * Find a connection by its ID.
+   * @param id The ID of the connection to find.
+   * @returns A promise resolving to the found connection.
    */
-  private applyFilter(connections: any[], filter?: FilterDto) {
-    if (!filter) return connections;
-    return connections.filter((connection) => {
-      for (const key in filter) {
-        if (key === 'metadata') {
-          const { key: metaKey, value: metaValue } = filter.metadata!;
-          if (
-            !connection.metadata[metaKey] ||
-            connection.metadata[metaKey] !== metaValue
-          ) {
-            return false;
-          }
-        } else if (connection[key] !== (filter as any)[key]) {
-          return false;
-        }
+  async findById(id: string): Promise<any> {
+    try {
+      this.logger.log(`Retrieving connection by ID: ${id}`);
+      const connection = await this.credoService.agent.connections.findById(id);
+      if (!connection) {
+        this.logger.warn(`Connection with ID ${id} not found`);
       }
-      return true;
-    });
-  }
-
-  /**
-   * Apply sorting to the connections based on the provided sort DTO.
-   * @param connections Array of connections to sort.
-   * @param sort Sort DTO with sorting criteria.
-   * @returns The sorted array of connections.
-   */
-  private applySort(connections: any[], sort: SortDto) {
-    return connections.sort((a, b) => {
-      const valueA = a[sort.attribute];
-      const valueB = b[sort.attribute];
-      if (valueA < valueB) {
-        return sort.order === 'asc' ? -1 : 1;
-      } else if (valueA > valueB) {
-        return sort.order === 'asc' ? 1 : -1;
-      } else {
-        return 0;
-      }
-    });
-  }
-
-  /**
-   * Apply cursor pagination to the filtered connections.
-   * @param filteredConnections Array of filtered connections.
-   * @param pagination Pagination DTO with pagination criteria.
-   * @returns An object containing paginated connections and pagination cursors.
-   */
-  private cursorPaginate(
-    filteredConnections: any[],
-    pagination?: PaginationDto,
-  ) {
-    const { limit, direction, cursor } = pagination || {
-      limit: 50,
-      cursor: undefined,
-    };
-    const parsedLimit = parseInt(limit.toString(), 10);
-    let startIndex = 0;
-    if (cursor) {
-      try {
-        // const decodedCursor = JSON.parse(
-        //   Buffer.from(cursor, 'base64').toString('utf-8'),
-        // );
-        startIndex = filteredConnections.findIndex(
-          (item) => item[this.idField] === cursor,
-        );
-        if (direction === 'next') {
-          startIndex += 1;
-        } else if (direction === 'previous') {
-          startIndex = Math.max(0, startIndex - parsedLimit);
-        }
-      } catch (error) {
-        throw new Error(`Invalid cursor: ${error.message}`);
-      }
+      return connection;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve connections by ID`);
+      throw error;
     }
-    const paginatedConnections = filteredConnections.slice(
-      startIndex,
-      startIndex + parsedLimit,
-    );
-    const nextCursor =
-      paginatedConnections.length + startIndex !== filteredConnections.length
-        ? Buffer.from(
-            JSON.stringify({
-              [this.idField]:
-                paginatedConnections[paginatedConnections.length - 1][
-                  this.idField
-                ],
-            }),
-          ).toString('base64')
-        : undefined;
-    const previousCursor =
-      startIndex > 0
-        ? Buffer.from(
-            JSON.stringify({
-              [this.idField]:
-                filteredConnections[Math.max(0, startIndex)][this.idField],
-            }),
-          ).toString('base64')
-        : undefined;
-    return {
-      data: paginatedConnections,
-      next: nextCursor,
-      previous: previousCursor,
-      limit: limit,
-    };
+  }
+
+  /**
+   * Find a connection by its DID.
+   * @param did The DID of the connection to find.
+   * @returns A promise resolving to the found connection record.
+   */
+  async findByDid(did: string): Promise<ConnectionRecord | null> {
+    try {
+      /* Note: It's based on theirDid value */
+      this.logger.log(`Retrieving connection by DID: ${did}`);
+      const connection =
+        await this.credoService.agent.connections.findByDid(did);
+      if (!connection) {
+        this.logger.warn(`Connection with DID ${did} not found`);
+      }
+      return connection;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve connections by DID`);
+      throw error;
+    }
+  }
+
+  /**
+   * Find a connection by its thread ID.
+   * @param threadId The thread ID of the connection to find.
+   * @returns A promise resolving to the found connection record.
+   */
+  async getByThreadId(threadId: string): Promise<ConnectionRecord> {
+    try {
+      this.logger.log(`Retrieving connection by thread ID: ${threadId}`);
+      const connection =
+        await this.credoService.agent.connections.getByThreadId(threadId);
+      if (!connection) {
+        this.logger.warn(`Connection with thread ID ${threadId} not found`);
+      }
+      return connection;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve connections by thread ID`);
+      throw error;
+    }
+  }
+
+  /**
+   * Find connections by invitation DID.
+   * @param invitationDid The invitation DID to search connections by.
+   * @returns A promise resolving to an array of connection records.
+   */
+  async findByInvitationDid(
+    invitationDid: string,
+  ): Promise<ConnectionRecord[]> {
+    try {
+      this.logger.log(
+        `Retrieving connections by invitation DID: ${invitationDid}`,
+      );
+      const connections =
+        await this.credoService.agent.connections.findByInvitationDid(
+          invitationDid,
+        );
+      if (!connections.length) {
+        this.logger.warn(
+          `Connections with invitation DID ${invitationDid} not found`,
+        );
+      }
+      return connections;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve connections by invitation DID`);
+      throw error;
+    }
+  }
+
+  /**
+   * Find all connections by out-of-band ID.
+   * @param outOfBandId The out-of-band ID to search connections by.
+   * @returns A promise resolving to an array of connection records.
+   */
+  async findAllByOutOfBandId(outOfBandId: string): Promise<ConnectionRecord[]> {
+    try {
+      this.logger.log(
+        `Retrieving connections by out of band ID: ${outOfBandId}`,
+      );
+      const connections =
+        await this.credoService.agent.connections.findAllByOutOfBandId(
+          outOfBandId,
+        );
+      if (!connections.length) {
+        this.logger.warn(
+          `Connections with out of band ID ${outOfBandId} not found`,
+        );
+      }
+      return connections;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve connections by out of band ID`);
+      throw error;
+    }
+  }
+
+  /**
+   * Find all connections by connection types.
+   * @param connectionTypes An array of connection types to search connections by.
+   * @returns A promise resolving to an array of connection records.
+   */
+  async findAllByConnectionTypes(
+    connectionTypes: Array<ConnectionType | string>,
+  ): Promise<ConnectionRecord[]> {
+    try {
+      this.logger.log(
+        `Retrieving connections by connection types: ${connectionTypes}`,
+      );
+      const connections =
+        await this.credoService.agent.connections.findAllByConnectionTypes(
+          connectionTypes,
+        );
+      if (!connections.length) {
+        this.logger.warn(
+          `Connections with connection types ${connectionTypes} not found`,
+        );
+      }
+      return connections;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve connections by connection types`);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a connection by its ID.
+   * @param connectionId The ID of the connection to delete.
+   * @returns A promise resolving after the deletion.
+   */
+  async deleteById(connectionId: string): Promise<void> {
+    try {
+      this.logger.log(`Deleting connection by ID: ${connectionId}`);
+      await this.credoService.agent.connections.deleteById(connectionId);
+      this.logger.log(
+        `Connection with ID ${connectionId} deleted successfully`,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to retrieve connections by ID`);
+      throw error;
+    }
+  }
+
+  /**
+   * Find connections by query parameters.
+   * @param query The query parameters to search connections by.
+   * @returns A promise resolving to an array of connection records.
+   */
+  async findAllByQuery(query: any): Promise<ConnectionRecord[]> {
+    try {
+      this.logger.log(
+        `Retrieving connections by query: ${JSON.stringify(query)}`,
+      );
+      const connections =
+        await this.credoService.agent.connections.findAllByQuery(query);
+      if (!connections.length) {
+        this.logger.warn(
+          `Connections matching query ${JSON.stringify(query)} not found`,
+        );
+      }
+      return connections;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve connections by query`);
+      throw error;
+    }
   }
 }
